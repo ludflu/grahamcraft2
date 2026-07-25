@@ -2,13 +2,14 @@
 
 import grahamcraft2.client.gl_compat  # noqa: F401
 
-from grahamcraft2.client.app import game, main
+from grahamcraft2.client import app
 
 
 def input(key: str) -> None:
     """Ursina input hook for block placement and breaking."""
-    game.handle_input(key)
+    if app.game is not None:
+        app.game.handle_input(key)
 
 
 if __name__ == "__main__":
-    main()
+    app.main()

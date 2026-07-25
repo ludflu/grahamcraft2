@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import argparse
 import grahamcraft2.client.gl_compat  # noqa: F401
 
 import queue
+from typing import Final
 
 from ursina import AmbientLight, DirectionalLight, Entity, Ursina, Vec3, application, camera, color, raycast, scene, window
 
@@ -19,14 +21,17 @@ from grahamcraft2.client.remote_players import RemotePlayers
 from grahamcraft2.client.rpc import DEFAULT_SERVER, GameSession
 from grahamcraft2.client.voxels import VoxelWorld
 
+DEFAULT_PORT: Final = 50051
+
 
 class Game:
     """Main game state, matching the structure of grahamcraft v1."""
 
-    def __init__(self) -> None:
+    def __init__(self, server: str = DEFAULT_SERVER) -> None:
         """Create the Ursina app, player, and server session."""
         patch_loaded_ursina_modules()
         Entity.default_shader = None
+        self.server = server
         self.app = Ursina(icon="", editor_ui_enabled=False)
         window.color = color.rgb32(135, 206, 235)
         scene.fog_density = (0, 99999)
@@ -35,7 +40,7 @@ class Game:
         self.block_events: queue.SimpleQueue = queue.SimpleQueue()
         self.player_events: queue.SimpleQueue = queue.SimpleQueue()
         self.session = GameSession(
-            DEFAULT_SERVER,
+            server,
             self.block_events,
             self.player_events,
         )
@@ -172,11 +177,33 @@ class GameLoop(Entity):
         self.game.remote_players.tick()
 
 
-game = Game()
+game: Game | None = None
 
 
-def main() -> None:
+def normalize_server_address(server: str) -> str:
+    """Accept host or host:port and default the gRPC port."""
+    if ":" in server:
+        return server
+    return f"{server}:{DEFAULT_PORT}"
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    """Parse client command-line options."""
+    parser = argparse.ArgumentParser(description="Grahamcraft multiplayer client")
+    parser.add_argument(
+        "--server",
+        "-s",
+        default=DEFAULT_SERVER,
+        help=f"game server address as host:port (default: {DEFAULT_SERVER})",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> None:
     """Launch the Ursina client."""
+    global game
+    args = parse_args(argv)
+    game = Game(normalize_server_address(args.server))
     game.run()
 
 
