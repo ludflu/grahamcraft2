@@ -151,6 +151,8 @@ class Game:
         self.session.start()
         if not self.session.wait_until_ready():
             print("Failed to connect to the game server.")
+            if self.session.connection_error:
+                print(self.session.connection_error)
             return
         self.remote_players.set_local_player(self.session.player_id)
         self.drain_block_events()
@@ -175,6 +177,10 @@ class GameLoop(Entity):
         """Apply server updates and animate remote players each frame."""
         self.game.drain_network_events()
         self.game.remote_players.tick()
+
+    def input(self, key: str) -> None:
+        """Forward input to the game."""
+        self.game.handle_input(key)
 
 
 game: Game | None = None

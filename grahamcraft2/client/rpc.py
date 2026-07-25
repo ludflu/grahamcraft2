@@ -37,6 +37,7 @@ class GameSession:
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._ready = threading.Event()
         self._spawn_position = (0.0, 0.0, 0.0)
+        self._connection_error = ""
 
     @property
     def spawn_position(self) -> tuple[float, float, float]:
@@ -54,7 +55,18 @@ class GameSession:
 
     def wait_until_ready(self, timeout: float = 10.0) -> bool:
         """Block until the initial world snapshot has been received."""
-        return self._ready.wait(timeout)
+        if not self._ready.wait(timeout):
+            if not self._connection_error:
+                self._connection_error = (
+                    f"Timed out after {timeout:.0f}s waiting for {self._server}"
+                )
+            return False
+        return not self._connection_error
+
+    @property
+    def connection_error(self) -> str:
+        """Return a connection failure message, if any."""
+        return self._connection_error
 
     def place_block(self, coord: BlockCoord) -> None:
         """Ask the server to place a block."""
@@ -70,21 +82,36 @@ class GameSession:
 
     def _run(self) -> None:
         """Maintain the gRPC connection until the process exits."""
-        with grpc.insecure_channel(self._server) as channel:
-            stub = game_pb2_grpc.GameServiceStub(channel)
-            self._join(stub)
-            events = stub.SubscribeEvents(
-                game_pb2.SubscribeRequest(player_id=self._player_id)
+        try:
+            with grpc.insecure_channel(self._server) as channel:
+                grpc.channel_ready_future(channel).result(timeout=10)
+                stub = game_pb2_grpc.GameServiceStub(channel)
+                self._join(stub)
+                events = stub.SubscribeEvents(
+                    game_pb2.SubscribeRequest(player_id=self._player_id)
+                )
+                threading.Thread(
+                    target=self._read_events,
+                    args=(events,),
+                    daemon=True,
+                ).start()
+                while True:
+                    self._flush_requests(stub)
+                    self._flush_positions(stub)
+                    time.sleep(REQUEST_POLL_SECONDS)
+        except grpc.FutureTimeoutError:
+            self._connection_error = (
+                f"Could not reach game server at {self._server}. "
+                "Check that the server is running and the IP is correct."
             )
-            threading.Thread(
-                target=self._read_events,
-                args=(events,),
-                daemon=True,
-            ).start()
-            while True:
-                self._flush_requests(stub)
-                self._flush_positions(stub)
-                time.sleep(REQUEST_POLL_SECONDS)
+        except grpc.RpcError as exc:
+            self._connection_error = (
+                f"gRPC error from {self._server}: {exc.code()} {exc.details()}"
+            )
+        except Exception as exc:
+            self._connection_error = (
+                f"Failed to connect to {self._server}: {exc}"
+            )
 
     def _read_events(self, events: grpc.CallIterator[game_pb2.GameEvent]) -> None:
         """Forward streamed game events to the main thread."""
