@@ -1,3 +1,4 @@
+mod collision;
 mod service;
 mod state;
 mod world;

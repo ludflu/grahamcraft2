@@ -70,6 +70,34 @@ impl World {
         }
     }
 
+    /// Restore a walkable 3×3 floor pad under `(x, z)` when blocks are missing.
+    pub fn ensure_spawn_pad(&mut self, x: f32, z: f32) -> Vec<BlockEntry> {
+        let cx = x.floor() as i32;
+        let cz = z.floor() as i32;
+        let mut placed = Vec::new();
+
+        for dx in -1..=1 {
+            for dz in -1..=1 {
+                let bx = cx + dx;
+                let bz = cz + dz;
+                if self.get_block(bx, 0, bz).unwrap_or(0) != 0 {
+                    continue;
+                }
+                let block_type = FLOOR_COLORS[((bx + bz) as usize) % FLOOR_COLORS.len()];
+                if self.set_block(bx, 0, bz, block_type) {
+                    placed.push(BlockEntry {
+                        x: bx,
+                        y: 0,
+                        z: bz,
+                        block_type,
+                    });
+                }
+            }
+        }
+
+        placed
+    }
+
     pub fn size_x(&self) -> i32 {
         self.size_x
     }
@@ -175,6 +203,21 @@ mod tests {
         assert_eq!(x, super::FLOOR_SIZE as f32 / 2.0);
         assert_eq!(y, super::SPAWN_HEIGHT);
         assert_eq!(z, super::FLOOR_SIZE as f32 / 2.0);
+    }
+
+    #[test]
+    fn ensure_spawn_pad_restores_missing_floor() {
+        let mut world = World::create_initial();
+        for dx in -1..=1 {
+            for dz in -1..=1 {
+                world.break_block(24 + dx, 0, 24 + dz);
+            }
+        }
+        assert_eq!(world.get_block(24, 0, 24), Some(0));
+
+        let placed = world.ensure_spawn_pad(24.0, 24.0);
+        assert_eq!(placed.len(), 9);
+        assert_ne!(world.get_block(24, 0, 24), Some(0));
     }
 
     #[test]

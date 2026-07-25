@@ -1,15 +1,16 @@
-.PHONY: proto run run-server test-server assets help
+.PHONY: proto run run-client run-server test-server assets help
 
 PROTO_DIR := proto
 GENERATED_DIR := grahamcraft2/generated
 
 help:
 	@echo "Targets:"
-	@echo "  make proto       - generate Python gRPC stubs"
-	@echo "  make assets      - note: player model is procedural (no download)"
-	@echo "  make run         - start the Ursina client"
-	@echo "  make run-server  - start the Rust game server"
-	@echo "  make test-server - run Rust server tests"
+	@echo "  make proto        - generate Python gRPC stubs"
+	@echo "  make assets       - note: player model is procedural (no download)"
+	@echo "  make run          - start the Ursina (Python) client"
+	@echo "  make run-client   - start the Bevy (Rust) client"
+	@echo "  make run-server   - start the Rust game server"
+	@echo "  make test-server  - run Rust server tests"
 
 assets:
 	@echo "Player uses procedural cubes; no character assets required."
@@ -24,6 +25,9 @@ proto:
 
 run:
 	uv run python main.py
+
+run-client:
+	$(MAKE) -C client run
 
 run-server:
 	$(MAKE) -C server run

@@ -4,6 +4,7 @@ use std::sync::Arc;
 use tokio::sync::{broadcast, RwLock};
 use uuid::Uuid;
 
+use crate::collision;
 use crate::world::World;
 
 const EVENT_CHANNEL_CAPACITY: usize = 256;
@@ -85,6 +86,14 @@ impl GameState {
         };
         let join_event = GameEvent::PlayerJoin(player.clone());
         let mut guard = state.write().await;
+        for block in guard.world.ensure_spawn_pad(player.x, player.z) {
+            guard.broadcast(GameEvent::BlockChange {
+                x: block.x,
+                y: block.y,
+                z: block.z,
+                block_type: block.block_type,
+            });
+        }
         guard.players.insert(player.id.clone(), player.clone());
         guard.broadcast(join_event);
         player
@@ -98,6 +107,13 @@ impl GameState {
         block_type: i32,
     ) -> bool {
         let mut guard = state.write().await;
+        if block_type != 0
+            && guard.players.values().any(|player| {
+                collision::block_overlaps_player(x, y, z, player.x, player.y, player.z)
+            })
+        {
+            return false;
+        }
         if !guard.world.set_block(x, y, z, block_type) {
             return false;
         }
@@ -212,6 +228,22 @@ mod tests {
         let mut receiver = state.read().await.subscribe();
 
         assert!(!GameState::set_block(&state, -1, 0, 0, 1).await);
+        assert!(receiver.try_recv().is_err());
+    }
+
+    #[tokio::test]
+    async fn set_block_inside_player_is_rejected() {
+        let state = GameState::new();
+        let mut receiver = state.read().await.subscribe();
+        let player = GameState::join(&state, "builder".into()).await;
+        let _ = next_event(&mut receiver).await;
+
+        let bx = player.x.floor() as i32;
+        let by = 1;
+        let bz = player.z.floor() as i32;
+
+        assert!(!GameState::set_block(&state, bx, by, bz, 1).await);
+        assert_ne!(state.read().await.world.get_block(bx, by, bz), Some(1));
         assert!(receiver.try_recv().is_err());
     }
 
