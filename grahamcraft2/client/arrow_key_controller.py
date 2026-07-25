@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable, Final
+from typing import TYPE_CHECKING, Final
 
 from ursina import Vec3, held_keys, raycast, time
 from ursina.prefabs.first_person_controller import FirstPersonController
@@ -14,6 +14,7 @@ JUMP_SPEED: Final = 6.5
 GRAVITY: Final = 24.0
 MAX_FALL_SPEED: Final = 14.0
 MAX_FALL_STEP: Final = 0.35
+SYNC_INTERVAL: Final = 0.05
 
 
 class ArrowKeyController(FirstPersonController):
@@ -23,21 +24,30 @@ class ArrowKeyController(FirstPersonController):
         self,
         initial_position: Vec3,
         session: GameSession | None = None,
-        on_before_update: Callable[[], None] | None = None,
         **kwargs: object,
     ) -> None:
         """Place the player and optionally attach a server session."""
         super().__init__(**kwargs)
         self.gravity = 0
         self.session = session
-        self.on_before_update = on_before_update
         self.position = initial_position
         self.last_position = initial_position
         self._was_airborne = False
         self._vertical_velocity = 0.0
+        self._last_sync_time = 0.0
+        self._gravity_enabled = True
+
+    def toggle_gravity(self) -> bool:
+        """Toggle custom gravity; returns the new enabled state."""
+        self._gravity_enabled = not self._gravity_enabled
+        if not self._gravity_enabled:
+            self._vertical_velocity = 0.0
+        return self._gravity_enabled
 
     def jump(self) -> None:
         """Jump with velocity-based physics instead of Ursina's animate_y."""
+        if not self._gravity_enabled:
+            return
         if not self.grounded:
             return
         self.grounded = False
@@ -48,8 +58,6 @@ class ArrowKeyController(FirstPersonController):
 
     def update(self) -> None:
         """Move with arrow keys, then run camera and collision updates."""
-        if self.on_before_update is not None:
-            self.on_before_update()
         speed = self.speed * time.dt
 
         if held_keys["up arrow"]:
@@ -61,12 +69,18 @@ class ArrowKeyController(FirstPersonController):
         if held_keys["right arrow"]:
             self.position += self.right * speed
 
+        if not self._gravity_enabled and held_keys["space"]:
+            self.y += speed
+
         super().update()
         self._apply_vertical_physics()
         self._sync_position_to_server()
 
     def _apply_vertical_physics(self) -> None:
         """Apply capped gravity and snap the player onto voxel tops."""
+        if not self._gravity_enabled:
+            return
+
         if not self.grounded:
             self._vertical_velocity -= GRAVITY * time.dt
             self._vertical_velocity = max(self._vertical_velocity, -MAX_FALL_SPEED)
@@ -100,10 +114,11 @@ class ArrowKeyController(FirstPersonController):
 
     def _ground_hit(self):
         """Return a downward raycast hit against walkable voxels."""
+        ray_distance = self.height + max(1.0, self.y) + 0.5
         return raycast(
             self.world_position + Vec3(0, self.height, 0),
             Vec3(0, -1, 0),
-            distance=self.height + 8,
+            distance=ray_distance,
             traverse_target=self.traverse_target,
             ignore=self.ignore_list,
         )
@@ -117,11 +132,15 @@ class ArrowKeyController(FirstPersonController):
         landed = self.grounded and self._was_airborne
         self._was_airborne = airborne
 
-        if not (landed or airborne or self._position_changed()):
+        if airborne and not landed:
+            if time.time() - self._last_sync_time < SYNC_INTERVAL:
+                return
+        elif not (landed or self._position_changed()):
             return
         pos = self.position
         self.session.send_position(pos.x, pos.y, pos.z)
         self.last_position = Vec3(pos.x, pos.y, pos.z)
+        self._last_sync_time = time.time()
 
     def _position_changed(self) -> bool:
         """Return True when the player moved enough to notify the server."""

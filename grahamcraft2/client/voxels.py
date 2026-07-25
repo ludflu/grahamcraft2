@@ -47,7 +47,6 @@ class Voxel(Entity):
             collider="mesh",
             shader=None,
         )
-        self.setShaderAuto()
         self.color = tint
 
 

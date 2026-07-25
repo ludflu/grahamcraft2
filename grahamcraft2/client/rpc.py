@@ -15,7 +15,7 @@ from grahamcraft2.generated import game_pb2, game_pb2_grpc
 DEFAULT_SERVER: Final = "localhost:50051"
 DEFAULT_BLOCK_TYPE: Final = 1
 PLAYER_NAME: Final = "player"
-REQUEST_POLL_SECONDS: Final = 0.01
+REQUEST_POLL_SECONDS: Final = 0.05
 
 
 class GameSession:

@@ -50,7 +50,6 @@ class Game:
             initial_position=Vec3(0, 0, 0),
             gravity=1,
             session=self.session,
-            on_before_update=self.drain_network_events,
         )
         Crosshair.hide_controller_cursor(self.player)
         self.crosshair = Crosshair()
@@ -74,20 +73,23 @@ class Game:
 
     def drain_player_events(self) -> None:
         """Apply every player update the server has sent."""
+        pending_moves: dict[str, PlayerMove] = {}
         while True:
             try:
                 event = self.player_events.get_nowait()
             except queue.Empty:
-                return
+                break
             if isinstance(event, PlayerJoin):
                 self.remote_players.apply_join(event)
                 if event.state.player_id != self.session.player_id:
                     pos = self.player.position
                     self.session.send_position(pos.x, pos.y, pos.z)
             elif isinstance(event, PlayerMove):
-                self.remote_players.apply_move(event)
+                pending_moves[event.player_id] = event
             else:
                 self.remote_players.apply_leave(event)
+        for move in pending_moves.values():
+            self.remote_players.apply_move(move)
 
     def _raycast_ignore(self) -> list[Entity]:
         """Entities that should not block player raycasts."""
@@ -131,6 +133,9 @@ class Game:
             self.place_from_raycast()
         elif key == "right mouse down":
             self.break_hovered()
+        elif key == "g":
+            enabled = self.player.toggle_gravity()
+            print(f"Gravity {'on' if enabled else 'off'}")
 
     def _snap_player_to_ground(self) -> None:
         """Place the player on top of the loaded floor."""
