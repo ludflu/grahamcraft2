@@ -1,0 +1,15 @@
+[project]
+name = "grahamcraft2"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "grpcio>=1.60",
+    "grpcio-tools>=1.60",
+    "protobuf>=4.25",
+    "ursina>=8.3.0",
+]
+
+[project.scripts]
+grahamcraft = "grahamcraft2.client.app:main"
