@@ -1,4 +1,4 @@
-//! Crosshair UI — positioned each frame on the targeted voxel face (see aiming.rs).
+//! Crosshair UI — positioned on the block placement point in the world (see aiming.rs).
 
 use bevy::prelude::*;
 use bevy::window::{CursorGrabMode, Window};

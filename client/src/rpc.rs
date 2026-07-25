@@ -306,3 +306,28 @@ pub fn normalize_server_address(server: &str) -> String {
     }
     format!("http://{server}:50051")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_server_address;
+
+    #[test]
+    fn normalize_adds_scheme_and_default_port() {
+        assert_eq!(
+            normalize_server_address("localhost"),
+            "http://localhost:50051"
+        );
+        assert_eq!(
+            normalize_server_address("192.168.1.10"),
+            "http://192.168.1.10:50051"
+        );
+        assert_eq!(
+            normalize_server_address("192.168.1.10:50051"),
+            "http://192.168.1.10:50051"
+        );
+        assert_eq!(
+            normalize_server_address("http://example.com:50051"),
+            "http://example.com:50051"
+        );
+    }
+}

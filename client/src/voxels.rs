@@ -46,11 +46,6 @@ impl VoxelWorld {
         self.blocks.contains_key(&coord)
     }
 
-    /// Center of the targeted block face (stable crosshair anchor).
-    pub fn face_center(coord: BlockCoord, normal: Vec3) -> Vec3 {
-        coord.as_vec3() + Vec3::splat(0.5) + normal * 0.5
-    }
-
     /// Center of the empty cell where a new block would be placed against `coord`/`normal`.
     pub fn placement_point(coord: BlockCoord, normal: Vec3) -> Vec3 {
         coord.as_vec3() + normal + Vec3::splat(0.5)
@@ -167,6 +162,11 @@ impl VoxelWorld {
         let cx = coord.x as f32 + 0.5;
         let cz = coord.z as f32 + 0.5;
         (cx - feet.x).abs() < radius + 0.5 && (cz - feet.z).abs() < radius + 0.5
+    }
+
+    /// True for floor voxels directly under the player's feet column.
+    pub fn is_floor_under_player(&self, coord: BlockCoord, feet: Vec3) -> bool {
+        self.block_under_player(coord, feet, crate::player::PLAYER_RADIUS)
     }
 
     /// True when placing a block at `coord` would intersect the player body.
@@ -537,9 +537,9 @@ mod tests {
     fn raycast_skips_blocks_under_player_and_hits_wall_ahead() {
         let world = world_with_blocks([
             BlockCoord::new(5, 0, 5),
-            BlockCoord::new(5, 0, 2),
-            BlockCoord::new(5, 1, 2),
-            BlockCoord::new(5, 2, 2),
+            BlockCoord::new(5, 0, 0),
+            BlockCoord::new(5, 1, 0),
+            BlockCoord::new(5, 2, 0),
         ]);
 
         let feet = Vec3::new(5.5, 1.0, 5.5);
@@ -547,11 +547,36 @@ mod tests {
         let direction = Vec3::new(0.0, 0.0, -1.0);
 
         let hit = world
-            .raycast_blocks(origin, direction, 12.0, Some(feet))
+            .raycast_blocks(origin, direction, 24.0, Some(feet))
             .expect("should hit the wall beyond the player");
 
-        assert_eq!(hit.coord, BlockCoord::new(5, 2, 2));
+        assert_eq!(hit.coord, BlockCoord::new(5, 2, 0));
         assert_eq!(hit.normal, Vec3::Z);
+    }
+
+    #[test]
+    fn raycast_skips_floor_under_player() {
+        let world = world_with_blocks([BlockCoord::new(5, 0, 5)]);
+
+        let feet = Vec3::new(5.5, 1.0, 5.5);
+        let origin = Vec3::new(5.5, 2.0, 8.0);
+        let direction = Vec3::new(0.0, -0.3, -1.0).normalize();
+
+        assert!(world
+            .raycast_blocks(origin, direction, 24.0, Some(feet))
+            .is_none());
+    }
+
+    #[test]
+    fn placement_coord_offsets_along_face_normal() {
+        let hit = BlockCoord::new(3, 1, 4);
+        let normal = Vec3::NEG_Z;
+        let placed = BlockCoord::new(
+            hit.x + normal.x as i32,
+            hit.y + normal.y as i32,
+            hit.z + normal.z as i32,
+        );
+        assert_eq!(placed, BlockCoord::new(3, 1, 3));
     }
 
     #[test]

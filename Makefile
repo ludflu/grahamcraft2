@@ -11,6 +11,11 @@ help:
 	@echo "  make run-client   - start the Bevy (Rust) client"
 	@echo "  make run-server   - start the Rust game server"
 	@echo "  make test-server  - run Rust server tests"
+	@echo ""
+	@echo "Remote server (both clients):"
+	@echo "  make run-client SERVER=192.168.1.10"
+	@echo "  make run-client ARGS=\"--server 192.168.1.10:50051\""
+	@echo "  make run ARGS=\"--server 192.168.1.10\""
 
 assets:
 	@echo "Player uses procedural cubes; no character assets required."
@@ -24,10 +29,10 @@ proto:
 	@python -c "from pathlib import Path; path = Path('$(GENERATED_DIR)/game_pb2_grpc.py'); text = path.read_text(); path.write_text(text.replace('import game_pb2', 'from . import game_pb2', 1))"
 
 run:
-	uv run python main.py
+	uv run python main.py $(if $(SERVER),--server $(SERVER),) $(ARGS)
 
 run-client:
-	$(MAKE) -C client run
+	$(MAKE) -C client run ARGS="$(if $(SERVER),--server $(SERVER),) $(ARGS)"
 
 run-server:
 	$(MAKE) -C server run

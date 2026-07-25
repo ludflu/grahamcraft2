@@ -28,6 +28,7 @@ struct Args {
 fn main() {
     let args = Args::parse();
     let server = rpc::normalize_server_address(&args.server);
+    eprintln!("Connecting to {server}...");
     let session = GameSession::start(server.clone());
 
     let ready = match session.wait_until_ready(Duration::from_secs(10)) {
